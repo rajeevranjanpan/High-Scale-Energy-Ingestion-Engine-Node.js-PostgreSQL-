@@ -1,0 +1,311 @@
+{
+	"info": {
+		"_postman_id": "df9f46ef-87a6-4c2d-a059-318a11e910a0",
+		"name": "High-Scale Energy Ingestion Engine",
+		"description": "## Overview\n\nThis service ingests two independent telemetry streams every 60 seconds:\n\n- Smart Meter stream (AC energy consumption)\n    \n- Vehicle stream (DC energy delivered + SoC + temperature)\n    \n\nIt stores data using a hot/cold strategy to support:\n\n- high write throughput\n    \n- fast current-state queries\n    \n- fast 24-hour analytics without full table scans\n    \n\n## Data Strategy\n\n### Cold Store (History)\n\nAppend-only telemetry:\n\n- meter_telemetry\n    \n- vehicle_telemetry\n    \n\n### Hot Store (Operational)\n\nUpserted latest state:\n\n- meter_live_status\n    \n- vehicle_live_status\n    \n\n## Insert vs Upsert\n\n- History path uses INSERT (append-only audit trail)\n    \n- Live path uses UPSERT to keep one row per device\n    \n\n## Analytics Query Performance\n\nAnalytics uses indexed time-window queries:\n\n- vehicle_telemetry(vehicle_id, ts)\n    \n- meter_telemetry(meter_id, ts)\n    \n\nThis prevents full scans on historical tables.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "27035702",
+		"_collection_link": "https://grey-star-420603.postman.co/workspace/My-Workspace~0acc79bc-8d17-4d07-8a83-08283f95531c/collection/27035702-df9f46ef-87a6-4c2d-a059-318a11e910a0?action=share&source=collection_link&creator=27035702"
+	},
+	"item": [
+		{
+			"name": "Step 1: Create Vehicle & Meter Link (Mapping)",
+			"item": [
+				{
+					"name": "3) All link list",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:3000/v1/links",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "3000",
+							"path": [
+								"v1",
+								"links"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "2) Get link by vehicle Id",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:3000/v1/links/:vehicleId",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "3000",
+							"path": [
+								"v1",
+								"links",
+								":vehicleId"
+							],
+							"variable": [
+								{
+									"key": "vehicleId",
+									"value": "v-900"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "1) Create link for vehicle and meter id",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"vehicleId\":\"v-900\",\"meterId\":\"m-101\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:3000/v1/links",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "3000",
+							"path": [
+								"v1",
+								"links"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Step 2: Ingest Meter Telemetry (Cold INSERT + Hot UPSERT)",
+			"item": [
+				{
+					"name": "1) Send Meter Telemetry",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"meterId\": \"m-101\",\r\n    \"kwhConsumedAc\": 10.5,\r\n    \"voltage\": 229.2,\r\n    \"timestamp\": \"2026-02-09T10:20:00Z\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:3000/v1/telemetry",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "3000",
+							"path": [
+								"v1",
+								"telemetry"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Step 3: Ingest Vehicle Telemetry (Cold INSERT + Hot UPSERT)",
+			"item": [
+				{
+					"name": "1) Send Vehicle Telemetry",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"vehicleId\": \"v-900\",\r\n    \"soc\": 55,\r\n    \"kwhDeliveredDc\": 8.9,\r\n    \"batteryTemp\": 35.2,\r\n    \"timestamp\": \"2026-02-09T10:20:00Z\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:3000/v1/telemetry",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "3000",
+							"path": [
+								"v1",
+								"telemetry"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Step 4: Get Analytics Performance (24h Summary)",
+			"item": [
+				{
+					"name": "1) Call Analytics Endpoint (24h Performance)",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:3000/v1/analytics/performance/:vehicleId\n",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "3000",
+							"path": [
+								"v1",
+								"analytics",
+								"performance",
+								":vehicleId\n"
+							],
+							"variable": [
+								{
+									"key": "vehicleId\n",
+									"value": "v-900"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Health Check",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/health",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"health"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Test Analytics for Unknown Vehicle (Should Fail)",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/v1/analytics/performance/v-unknown",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"v1",
+						"analytics",
+						"performance",
+						"v-unknown"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Test Invalid Telemetry (Should Fail)",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\"hello\":\"world\"}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:3000/v1/telemetry",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"v1",
+						"telemetry"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
